@@ -39,3 +39,12 @@ yarn-error.log
 *credentials*.json
 *config*.json
 !*config.example.json
+
+# 환자 데이터 (개인정보)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/output/*.html
+data/output/*.csv
+!data/output/.gitkeep

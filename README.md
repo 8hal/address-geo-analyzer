@@ -6,9 +6,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| **목적** | 병원 환자 주소 데이터를 지오코딩하여 지도 기반 통계 제공 |
-| **데이터 소스** | BigQuery (`hc-bi-project`) |
-| **상태** | 🚧 분석 중 |
+| **목적** | 동탄 병원 환자 도로명 주소를 동/아파트 단위로 변환하고 지도 시각화 |
+| **데이터 소스** | 병원 EMR 시스템 (주소 엑셀 추출) |
+| **고객** | 친구 (동탄 병원 원장) |
+| **상태** | 🚧 개발 중 |
 
 ## 📁 프로젝트 구조
 
@@ -28,27 +29,37 @@ address-geo-analyzer/
 └── docs/               # 문서
 ```
 
-## 🔧 실행 방법
+## 🔧 사용 방법
 
 ```bash
-# Python 스크립트 실행
-python scripts/python/analysis.py
+# 1. 환자 주소 데이터를 data/raw/ 에 배치 (예: patients_2024Q1.xlsx)
 
-# Shell 스크립트 실행
-./scripts/shell/fetch-data.sh
+# 2. 지오코딩 실행
+python scripts/python/geocode.py data/raw/patients_2024Q1.xlsx
+
+# 3. 지도 생성
+python scripts/python/visualize.py data/processed/geocoded_2024Q1.csv
+
+# 4. 결과물 확인
+open data/output/map_2024Q1.html
 ```
 
-## 📊 주요 분석
+## 📊 주요 기능
 
-- [ ] 분석 1
-- [ ] 분석 2
-- [ ] 분석 3
+### Phase 1: 배치 분석
+- [ ] 도로명 주소 → 동/아파트명 변환 (Kakao Local API)
+- [ ] 지도 히트맵 생성 (Folium)
+- [ ] 통계 리포트 (HTML)
+
+### Phase 2: 시스템 연동 (미정)
+- [ ] EMR 시스템 필드 추가 자문
+- [ ] 배치 데이터 보강 스크립트
 
 ## 📝 관련 문서
 
-- [분석 보고서](./reports/)
-- [쿼리 가이드](./docs/)
+- [요구사항 상세](./docs/REQUIREMENTS.md)
+- [API 설정 가이드](./docs/API_SETUP.md)
 
 ---
 
-문의: #moderation_qna 또는 ticket bot
+**프로젝트 그룹**: income-growth (cos_find 하왕수님과 동일 인맥)
