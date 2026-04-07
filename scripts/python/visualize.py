@@ -188,12 +188,44 @@ def create_statistics_report(df: pd.DataFrame, output_path: str):
     </div>
     
     <div class="card">
-        <h2>🏠 아파트별 환자 분포 (상위 20개)</h2>
+        <h2>🏘️ 동별 상세 현황 (아파트 포함)</h2>
+"""
+    
+    # 동별 상세 (아파트 목록 포함)
+    for dong in dong_counts.head(10).index:
+        dong_df = df[df["dong"] == dong]
+        dong_total = len(dong_df)
+        
+        # 해당 동의 아파트별 집계
+        building_in_dong = dong_df[dong_df["building"] != ""]["building"].value_counts()
+        
+        html += f"""
+        <div style="background: #f8f9fa; padding: 15px; margin-bottom: 15px; border-radius: 8px; border-left: 4px solid #3498db;">
+            <h3 style="margin-top: 0; color: #2c3e50;">{dong} ({dong_total}명)</h3>
+"""
+        
+        if len(building_in_dong) > 0:
+            html += "<ul style='margin: 0; padding-left: 20px;'>"
+            for building, count in building_in_dong.items():
+                pct_in_dong = (count / dong_total) * 100
+                html += f"<li><strong>{building}</strong>: {count}명 ({pct_in_dong:.1f}%)</li>"
+            html += "</ul>"
+        else:
+            html += "<p style='color: #7f8c8d; margin: 0;'>아파트 정보 없음 (단독주택 또는 오피스텔)</p>"
+        
+        html += "</div>"
+    
+    html += """
+    </div>
+    
+    <div class="card">
+        <h2>🏠 아파트별 환자 분포 (동 정보 포함)</h2>
         <table>
             <thead>
                 <tr>
                     <th>순위</th>
                     <th>아파트</th>
+                    <th>동</th>
                     <th>환자 수</th>
                     <th>비율</th>
                 </tr>
@@ -201,13 +233,18 @@ def create_statistics_report(df: pd.DataFrame, output_path: str):
             <tbody>
 """
     
-    for idx, (building, count) in enumerate(building_counts.items(), 1):
-        pct = (count / len(building_df)) * 100 if len(building_df) > 0 else 0
+    # 아파트별 집계 + 동 정보
+    building_with_dong = building_df.groupby(["building", "dong"]).size().reset_index(name="count")
+    building_with_dong = building_with_dong.sort_values("count", ascending=False).head(20)
+    
+    for idx, row in enumerate(building_with_dong.itertuples(), 1):
+        pct = (row.count / len(building_df)) * 100
         html += f"""
                 <tr>
                     <td><span class="rank">{idx}</span></td>
-                    <td>{building}</td>
-                    <td class="count">{count}</td>
+                    <td>{row.building}</td>
+                    <td><span style="background: #ecf0f1; padding: 4px 8px; border-radius: 4px;">{row.dong}</span></td>
+                    <td class="count">{row.count}</td>
                     <td>{pct:.1f}%</td>
                 </tr>
 """
@@ -228,25 +265,37 @@ def create_statistics_report(df: pd.DataFrame, output_path: str):
 
 def print_statistics(df: pd.DataFrame):
     """
-    동/아파트별 통계를 콘솔에 출력
+    동/아파트별 통계를 콘솔에 출력 (동별 아파트 목록 포함)
     """
     print("\n" + "="*50)
-    print("📊 동별 환자 수 (상위 10개)")
+    print("📊 동별 환자 수")
     print("="*50)
-    dong_counts = df["dong"].value_counts().head(10)
+    dong_counts = df[df["dong"] != ""]["dong"].value_counts().head(10)
     for dong, count in dong_counts.items():
         pct = (count / len(df)) * 100
-        print(f"{dong:15s} {count:4d}명 ({pct:5.1f}%)")
+        print(f"\n{dong}: {count}명 ({pct:.1f}%)")
+        
+        # 해당 동의 아파트 목록
+        dong_df = df[df["dong"] == dong]
+        building_in_dong = dong_df[dong_df["building"] != ""]["building"].value_counts()
+        
+        if len(building_in_dong) > 0:
+            print("  📌 아파트:")
+            for building, b_count in building_in_dong.items():
+                pct_in_dong = (b_count / count) * 100
+                print(f"     - {building}: {b_count}명 ({pct_in_dong:.1f}%)")
     
     print("\n" + "="*50)
-    print("🏠 아파트별 환자 수 (상위 10개)")
+    print("🏠 아파트별 환자 수 (동 정보 포함)")
     print("="*50)
     building_df = df[df["building"] != ""]
     if len(building_df) > 0:
-        building_counts = building_df["building"].value_counts().head(10)
-        for building, count in building_counts.items():
-            pct = (count / len(building_df)) * 100
-            print(f"{building:30s} {count:4d}명 ({pct:5.1f}%)")
+        building_with_dong = building_df.groupby(["building", "dong"]).size().reset_index(name="count")
+        building_with_dong = building_with_dong.sort_values("count", ascending=False).head(10)
+        
+        for idx, row in enumerate(building_with_dong.itertuples(), 1):
+            pct = (row.count / len(building_df)) * 100
+            print(f"{idx:2d}. {row.building:35s} ({row.dong}) {row.count:3d}명 ({pct:5.1f}%)")
     else:
         print("아파트 정보가 없습니다.")
 

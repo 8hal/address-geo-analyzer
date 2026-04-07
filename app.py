@@ -168,37 +168,56 @@ if uploaded_file:
                 
                 st.markdown("---")
                 
-                # 동별 분포
+                # 동별 분포 (아파트 목록 포함)
                 st.subheader("📍 동별 환자 분포")
-                dong_counts = result_df["dong"].value_counts().head(10)
                 
-                col1, col2 = st.columns([2, 1])
+                # 동별 집계
+                dong_counts = result_df[result_df["dong"] != ""]["dong"].value_counts()
                 
-                with col1:
-                    st.bar_chart(dong_counts)
+                # 차트
+                st.bar_chart(dong_counts.head(10))
                 
-                with col2:
-                    for dong, count in dong_counts.items():
-                        pct = (count / len(result_df)) * 100
-                        st.metric(dong, f"{count}명 ({pct:.1f}%)")
+                # 동별 상세 (아파트 목록 포함)
+                st.markdown("### 🏘️ 동별 상세 현황")
+                
+                for dong in dong_counts.head(10).index:
+                    dong_df = result_df[result_df["dong"] == dong]
+                    dong_total = len(dong_df)
+                    dong_pct = (dong_total / len(result_df)) * 100
+                    
+                    with st.expander(f"**{dong}** - {dong_total}명 ({dong_pct:.1f}%)", expanded=True):
+                        # 해당 동의 아파트별 집계
+                        building_in_dong = dong_df[dong_df["building"] != ""]["building"].value_counts()
+                        
+                        if len(building_in_dong) > 0:
+                            st.markdown("**📌 아파트 분포:**")
+                            for building, count in building_in_dong.items():
+                                pct_in_dong = (count / dong_total) * 100
+                                st.markdown(f"- {building}: **{count}명** ({pct_in_dong:.1f}%)")
+                        else:
+                            st.info("아파트 정보가 없습니다 (단독주택 또는 오피스텔)")
                 
                 st.markdown("---")
                 
-                # 아파트별 분포
-                st.subheader("🏠 아파트별 환자 분포")
+                # 아파트별 분포 (동 정보 포함)
+                st.subheader("🏠 아파트별 환자 분포 (상위 20개)")
                 building_df = result_df[result_df["building"] != ""]
+                
                 if len(building_df) > 0:
-                    building_counts = building_df["building"].value_counts().head(10)
+                    # 아파트별 집계 + 동 정보
+                    building_with_dong = building_df.groupby(["building", "dong"]).size().reset_index(name="count")
+                    building_with_dong = building_with_dong.sort_values("count", ascending=False).head(20)
                     
-                    col1, col2 = st.columns([2, 1])
-                    
-                    with col1:
-                        st.bar_chart(building_counts)
-                    
-                    with col2:
-                        for building, count in building_counts.items():
-                            pct = (count / len(building_df)) * 100
-                            st.metric(building, f"{count}명 ({pct:.1f}%)")
+                    # 테이블로 표시
+                    st.dataframe(
+                        building_with_dong.rename(columns={
+                            "building": "아파트",
+                            "dong": "동",
+                            "count": "환자 수"
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
                 else:
                     st.info("아파트 정보가 없습니다.")
                 
