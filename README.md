@@ -32,26 +32,34 @@ address-geo-analyzer/
 ## 🔧 사용 방법
 
 ```bash
-# 1. 환자 주소 데이터를 data/raw/ 에 배치 (예: patients_2024Q1.xlsx)
+# 1. 환자 주소 데이터를 data/raw/ 에 배치 (CSV 또는 엑셀)
+#    필수 컬럼: "주소"
 
-# 2. 지오코딩 실행
-python scripts/python/geocode.py data/raw/patients_2024Q1.xlsx
+# 2. 주소 분석 실행
+cd scripts/python
+python geocode.py ../../data/raw/sample_addresses.csv
 
-# 3. 지도 생성
-python scripts/python/visualize.py data/processed/geocoded_2024Q1.csv
+# 3. HTML 리포트 생성
+python visualize.py ../../data/processed/geocoded_*.csv
 
 # 4. 결과물 확인
-open data/output/map_2024Q1.html
+open ../../data/output/report_*.html
 ```
+
+**API 키 발급 불필요** - Postcodify 무료 API 사용
 
 ## 📊 주요 기능
 
-### Phase 1: 배치 분석
-- [ ] 도로명 주소 → 동/아파트명 변환 (Kakao Local API)
-- [ ] 지도 히트맵 생성 (Folium)
-- [ ] 통계 리포트 (HTML)
+### Phase 1: 배치 분석 (완료)
+- [x] 도로명 주소 → 동/아파트명 변환 (Postcodify 무료 API)
+- [x] HTML 통계 리포트 생성
+- [x] 동별/아파트별 순위 집계
 
-### Phase 2: 시스템 연동 (미정)
+### Phase 2: 지도 시각화 (선택사항)
+- [ ] Kakao Maps API 연동 (위경도 좌표 필요)
+- [ ] 히트맵 시각화
+
+### Phase 3: 시스템 연동 (미정)
 - [ ] EMR 시스템 필드 추가 자문
 - [ ] 배치 데이터 보강 스크립트
 
