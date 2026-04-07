@@ -48,3 +48,6 @@ data/processed/*
 data/output/*.html
 data/output/*.csv
 !data/output/.gitkeep
+
+# Streamlit
+.streamlit/secrets.toml
