@@ -202,6 +202,12 @@ uploaded_file = st.file_uploader(
     help="환자 주소가 담긴 파일을 선택하세요"
 )
 
+# 파일이 새로 업로드되면 이전 결과 초기화
+if uploaded_file:
+    if "last_file" not in st.session_state or st.session_state.last_file != uploaded_file.name:
+        st.session_state.last_file = uploaded_file.name
+        st.session_state.result_df = None
+
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
@@ -212,92 +218,87 @@ if uploaded_file:
 
         if st.button("🚀 분석 시작", type="primary"):
             with st.spinner("주소 분석 중..."):
-                result_df = process_addresses(df)
+                st.session_state.result_df = process_addresses(df)
 
-            if result_df is not None:
-                st.success("✅ 분석 완료!")
+        # session_state에 결과가 있으면 계속 표시
+        result_df = st.session_state.get("result_df", None)
 
-                # ── 요약 통계 ──
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("총 환자 수", len(result_df))
-                with col2:
-                    st.metric("고유 동 수", result_df[result_df["dong"] != ""]["dong"].nunique())
-                with col3:
-                    st.metric("아파트 거주자", result_df[result_df["building"] != ""].shape[0])
-                with col4:
-                    rate = (result_df["dong"] != "").sum() / len(result_df) * 100
-                    st.metric("분석 성공률", f"{rate:.1f}%")
+        if result_df is not None:
+            st.success("✅ 분석 완료!")
+
+            # ── 요약 통계 ──
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("총 환자 수", len(result_df))
+            with col2:
+                st.metric("고유 동 수", result_df[result_df["dong"] != ""]["dong"].nunique())
+            with col3:
+                st.metric("아파트 거주자", result_df[result_df["building"] != ""].shape[0])
+            with col4:
+                rate = (result_df["dong"] != "").sum() / len(result_df) * 100
+                st.metric("분석 성공률", f"{rate:.1f}%")
+
+            st.markdown("---")
+
+            # ── 탭 구성 ──
+            tab_stat, tab_map = st.tabs(["📊 통계", "🗺️ 지도"])
+
+            with tab_stat:
+                st.subheader("📍 동별 환자 분포")
+                dong_counts = result_df[result_df["dong"] != ""]["dong"].value_counts()
+                st.bar_chart(dong_counts.head(10))
+
+                st.markdown("### 🏘️ 동별 상세 현황")
+                for dong in dong_counts.head(10).index:
+                    dong_df = result_df[result_df["dong"] == dong]
+                    dong_total = len(dong_df)
+                    dong_pct = (dong_total / len(result_df)) * 100
+                    with st.expander(f"**{dong}** - {dong_total}명 ({dong_pct:.1f}%)", expanded=True):
+                        building_in_dong = dong_df[dong_df["building"] != ""]["building"].value_counts()
+                        if len(building_in_dong) > 0:
+                            st.markdown("**📌 아파트 분포:**")
+                            for building, count in building_in_dong.items():
+                                pct_in_dong = (count / dong_total) * 100
+                                st.markdown(f"- {building}: **{count}명** ({pct_in_dong:.1f}%)")
+                        else:
+                            st.info("아파트 정보 없음 (단독주택 또는 오피스텔)")
 
                 st.markdown("---")
+                st.subheader("🏠 아파트별 환자 분포 (상위 20개)")
+                building_df = result_df[result_df["building"] != ""]
+                if len(building_df) > 0:
+                    bwd = building_df.groupby(["building", "dong"]).size().reset_index(name="count")
+                    bwd = bwd.sort_values("count", ascending=False).head(20)
+                    st.dataframe(
+                        bwd.rename(columns={"building": "아파트", "dong": "동", "count": "환자 수"}),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info("아파트 정보가 없습니다.")
 
-                # ── 탭 구성 ──
-                tab_stat, tab_map = st.tabs(["📊 통계", "🗺️ 지도"])
-
-                with tab_stat:
-                    # 동별 차트
-                    st.subheader("📍 동별 환자 분포")
-                    dong_counts = result_df[result_df["dong"] != ""]["dong"].value_counts()
-                    st.bar_chart(dong_counts.head(10))
-
-                    # 동별 상세 (아파트 포함)
-                    st.markdown("### 🏘️ 동별 상세 현황")
-                    for dong in dong_counts.head(10).index:
-                        dong_df = result_df[result_df["dong"] == dong]
-                        dong_total = len(dong_df)
-                        dong_pct = (dong_total / len(result_df)) * 100
-                        with st.expander(f"**{dong}** - {dong_total}명 ({dong_pct:.1f}%)", expanded=True):
-                            building_in_dong = dong_df[dong_df["building"] != ""]["building"].value_counts()
-                            if len(building_in_dong) > 0:
-                                st.markdown("**📌 아파트 분포:**")
-                                for building, count in building_in_dong.items():
-                                    pct_in_dong = (count / dong_total) * 100
-                                    st.markdown(f"- {building}: **{count}명** ({pct_in_dong:.1f}%)")
-                            else:
-                                st.info("아파트 정보 없음 (단독주택 또는 오피스텔)")
-
-                    st.markdown("---")
-
-                    # 아파트별 테이블
-                    st.subheader("🏠 아파트별 환자 분포 (상위 20개)")
-                    building_df = result_df[result_df["building"] != ""]
-                    if len(building_df) > 0:
-                        bwd = building_df.groupby(["building", "dong"]).size().reset_index(name="count")
-                        bwd = bwd.sort_values("count", ascending=False).head(20)
-                        st.dataframe(
-                            bwd.rename(columns={"building": "아파트", "dong": "동", "count": "환자 수"}),
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                    else:
-                        st.info("아파트 정보가 없습니다.")
-
-                    st.markdown("---")
-                    with st.expander("📋 전체 결과 보기"):
-                        st.dataframe(result_df)
-
-                with tab_map:
-                    st.subheader("🗺️ 환자 분포 지도")
-                    if KAKAO_API_KEY:
-                        render_map(result_df)
-                    else:
-                        st.warning("""
-                        ⚠️ **지도 기능을 사용하려면 Kakao API 키가 필요합니다.**
-
-                        관리자에게 문의하세요.
-                        """)
-
-                # ── CSV 다운로드 ──
                 st.markdown("---")
-                csv = result_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                st.download_button(
-                    label="📥 결과 다운로드 (CSV)",
-                    data=csv,
-                    file_name=f"환자주소분석_{timestamp}.csv",
-                    mime="text/csv",
-                    type="primary"
-                )
+                with st.expander("📋 전체 결과 보기"):
+                    st.dataframe(result_df)
+
+            with tab_map:
+                st.subheader("🗺️ 환자 분포 지도")
+                if KAKAO_API_KEY:
+                    render_map(result_df)
+                else:
+                    st.warning("⚠️ Kakao API 키가 필요합니다. 관리자에게 문의하세요.")
+
+            # ── CSV 다운로드 ──
+            st.markdown("---")
+            csv = result_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.download_button(
+                label="📥 결과 다운로드 (CSV)",
+                data=csv,
+                file_name=f"환자주소분석_{timestamp}.csv",
+                mime="text/csv",
+                type="primary"
+            )
 
     except Exception as e:
         st.error(f"❌ 오류 발생: {e}")
