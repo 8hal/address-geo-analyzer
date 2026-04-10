@@ -189,7 +189,7 @@ def render_map(result_df: pd.DataFrame):
 
     # ── 2. 버블맵 ──────────────────────────────────────────────
     with tab_bubble:
-        st.caption("원 클릭 → 아파트 정보 팝업 | 원 크기 = 환자 수")
+        st.caption("버블 클릭 → 아래 카드에 상세 정보 표시 | 버블 크기 = 환자 수")
         m2 = folium.Map(location=[center_lat, center_lng], zoom_start=14,
                         tiles=CARTO_TILES, attr=CARTO_ATTR)
 
@@ -200,7 +200,6 @@ def render_map(result_df: pd.DataFrame):
             color    = count_to_color(count, min_count, max_count)
             radius   = 18 + (count - min_count) * 10
 
-            # CircleMarker + popup (클릭시 정보 표시)
             folium.CircleMarker(
                 location=[row["lat"], row["lng"]],
                 radius=radius,
@@ -210,18 +209,13 @@ def render_map(result_df: pd.DataFrame):
                 fill_color=color,
                 fill_opacity=0.88,
                 tooltip=folium.Tooltip(
-                    f"<b>{building}</b><br>동: {dong}<br>👤 {count}명",
+                    f"<div style='font-size:13px;padding:4px 2px;'>"
+                    f"<b>{building}</b><br>📍 {dong} | 👤 {count}명</div>",
                     sticky=True
-                ),
-                popup=folium.Popup(
-                    f"<b style='font-size:14px'>{building}</b><br>"
-                    f"📍 동: {dong}<br>"
-                    f"👤 환자 수: <b>{count}명</b>",
-                    max_width=240
                 )
             ).add_to(m2)
 
-            # 숫자 라벨 (pointer-events:none → 클릭이 CircleMarker로 통과)
+            # 숫자 (pointer-events:none → 클릭 통과)
             folium.Marker(
                 location=[row["lat"], row["lng"]],
                 icon=folium.DivIcon(
@@ -239,8 +233,32 @@ def render_map(result_df: pd.DataFrame):
             ).add_to(m2)
 
         m2.get_root().html.add_child(folium.Element(make_legend(min_count, max_count)))
-        st_folium(m2, use_container_width=True, height=MAP_HEIGHT, key="tab_bubble",
-                  returned_objects=[])
+
+        # 클릭 결과 수신 (last_object_clicked_tooltip로 건물 식별)
+        bubble_result = st_folium(m2, use_container_width=True, height=MAP_HEIGHT,
+                                  key="tab_bubble",
+                                  returned_objects=["last_object_clicked_tooltip"])
+
+        # 클릭한 버블 정보를 session_state에 저장
+        if bubble_result and bubble_result.get("last_object_clicked_tooltip"):
+            raw = bubble_result["last_object_clicked_tooltip"]
+            st.session_state["bubble_selected"] = raw
+
+        # 선택 정보 카드 표시
+        if st.session_state.get("bubble_selected"):
+            import re
+            raw = st.session_state["bubble_selected"]
+            # HTML 태그 제거해서 텍스트만 추출
+            text = re.sub(r"<[^>]+>", "", raw).strip()
+            st.markdown(
+                f"""<div style="
+                    background:#f8f9fa;border-left:4px solid #3498db;
+                    padding:12px 16px;border-radius:0 8px 8px 0;
+                    font-size:14px;margin-top:8px;">
+                    📌 {text}
+                </div>""",
+                unsafe_allow_html=True
+            )
 
     # ── 3. 라벨맵 ──────────────────────────────────────────────
     with tab_label:
