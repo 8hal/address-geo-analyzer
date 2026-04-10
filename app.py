@@ -200,30 +200,28 @@ def render_map(result_df: pd.DataFrame):
             color    = count_to_color(count, min_count, max_count)
             short    = building[:13] + "…" if len(building) > 13 else building
 
+            size = 36 + min(count - min_count, 20) * 2  # 36~76px
             label_html = f"""
             <div style="
+                width:{size}px;height:{size}px;
                 background:{color};
                 color:#fff;
-                padding:4px 9px;
-                border-radius:10px;
-                font-size:11px;
+                border-radius:50%;
+                border:2.5px solid rgba(255,255,255,0.9);
+                box-shadow:1px 2px 6px rgba(0,0,0,0.35);
+                display:flex;align-items:center;justify-content:center;
+                font-size:{max(11, size//3)}px;
                 font-weight:bold;
-                white-space:nowrap;
-                border:1.5px solid rgba(255,255,255,0.8);
-                box-shadow:1px 1px 4px rgba(0,0,0,0.3);
-                text-align:center;
-                line-height:1.5;
+                text-shadow:0 1px 3px rgba(0,0,0,0.5);
                 cursor:pointer;
-            ">
-                {dong} · 👤 {count}명
-            </div>"""
+            ">{count}</div>"""
 
             folium.Marker(
                 location=[row["lat"], row["lng"]],
                 icon=folium.DivIcon(
                     html=label_html,
-                    icon_size=(120, 28),
-                    icon_anchor=(60, 14)
+                    icon_size=(size, size),
+                    icon_anchor=(size // 2, size // 2)
                 ),
                 popup=folium.Popup(
                     f"<b style='font-size:14px'>{building}</b><br>"
