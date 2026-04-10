@@ -14,7 +14,7 @@ import requests
 import time
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import HeatMap, MarkerCluster
+from folium.plugins import MarkerCluster
 from datetime import datetime
 
 # 페이지 설정
@@ -154,7 +154,7 @@ def make_legend(min_count, max_count):
 
 
 def render_map(result_df: pd.DataFrame):
-    """Folium 지도 렌더링 (히트맵 / 라벨맵)"""
+    """Folium 지도 렌더링 — 원형 마커로 아파트별 환자 수 표시"""
     valid = result_df.dropna(subset=["lat", "lng"])
     if len(valid) == 0:
         st.warning("⚠️ 위경도 데이터가 없습니다. Kakao API 키를 설정해주세요.")
@@ -174,21 +174,8 @@ def render_map(result_df: pd.DataFrame):
     min_count = int(building_groups["count"].min()) if len(building_groups) > 0 else 1
     max_count = int(building_groups["count"].max()) if len(building_groups) > 0 else 1
 
-    # ────────── 탭 ──────────
-    tab_heat, tab_label = st.tabs(["🔥 히트맵", "🏷️ 라벨맵"])
-
-    # ── 1. 히트맵 ──────────────────────────────────────────────
-    with tab_heat:
-        st.caption("밀집 지역을 색상 강도로 표현합니다.")
-        m = folium.Map(location=[center_lat, center_lng], zoom_start=14,
-                       tiles=CARTO_TILES, attr=CARTO_ATTR)
-        heat_data = [[float(r["lat"]), float(r["lng"])] for _, r in valid.iterrows()]
-        HeatMap(heat_data, radius=30, blur=20, min_opacity=0.4).add_to(m)
-        st_folium(m, use_container_width=True, height=MAP_HEIGHT, key="tab_heat",
-                  returned_objects=[])
-
-    # ── 2. 라벨맵 (줌 레벨에 따라 아파트 이름 표시/숨김) ──────────
-    with tab_label:
+    # ── 라벨맵 ──────────────────────────────────────────────────
+    if True:
         st.caption("동 · 환자 수 표시 | 클릭하면 아파트 상세 정보 확인")
         m3 = folium.Map(location=[center_lat, center_lng], zoom_start=15,
                         tiles=CARTO_TILES, attr=CARTO_ATTR)
