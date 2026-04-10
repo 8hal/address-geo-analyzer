@@ -122,10 +122,6 @@ def render_map(result_df: pd.DataFrame):
     CARTO_TILES = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
     CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
 
-    # 동별 색상 팔레트
-    palette = ["#3498db", "#e74c3c", "#27ae60", "#9b59b6", "#e67e22", "#1abc9c", "#e91e63"]
-    dong_colors = {dong: palette[i % len(palette)] for i, dong in enumerate(valid["dong"].unique())}
-
     # 아파트별 집계 (위치, 환자 수)
     building_groups = (
         valid[valid["building"] != ""]
@@ -134,6 +130,24 @@ def render_map(result_df: pd.DataFrame):
         .reset_index()
         .sort_values("count", ascending=False)
     )
+
+    def count_to_color(count, min_c, max_c):
+        """환자 수 → 색상 (연파랑 → 주황 → 진빨강)"""
+        if max_c == min_c:
+            return "#74b9ff"
+        ratio = (count - min_c) / (max_c - min_c)
+        # #74b9ff(연파랑) → #fdcb6e(노랑) → #d63031(진빨강)
+        if ratio < 0.5:
+            t = ratio * 2
+            r = int(116 + t * (253 - 116))
+            g = int(185 + t * (203 - 185))
+            b = int(255 + t * (110 - 255))
+        else:
+            t = (ratio - 0.5) * 2
+            r = int(253 + t * (214 - 253))
+            g = int(203 + t * (48  - 203))
+            b = int(110 + t * (49  - 110))
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     tab1, tab2 = st.tabs(["🔥 히트맵", "📍 마커"])
 
@@ -145,33 +159,36 @@ def render_map(result_df: pd.DataFrame):
         HeatMap(heat_data, radius=25, blur=20, min_opacity=0.5).add_to(m)
         st_folium(m, use_container_width=True, height=520, key="heatmap_tab")
 
-    # ── 마커 (아파트명 + 환자 수 라벨) ──
+    # ── 마커 (아파트명 + 환자 수 기반 색상) ──
     with tab2:
         m2 = folium.Map(location=[center_lat, center_lng], zoom_start=14,
                         tiles=CARTO_TILES, attr=CARTO_ATTR)
 
-        for _, row in building_groups.iterrows():
-            color = dong_colors.get(row["dong"], "#7f8c8d")
-            count = int(row["count"])
-            building = row["building"]
-            dong = row["dong"]
+        min_count = int(building_groups["count"].min()) if len(building_groups) > 0 else 1
+        max_count = int(building_groups["count"].max()) if len(building_groups) > 0 else 1
 
-            # 라벨 마커: 아파트명 + 환자 수
+        for _, row in building_groups.iterrows():
+            count   = int(row["count"])
+            building = row["building"]
+            dong    = row["dong"]
+            color   = count_to_color(count, min_count, max_count)
+
             label_html = f"""
             <div style="
                 background:{color};
                 color:#fff;
-                padding:5px 9px;
+                padding:5px 10px;
                 border-radius:16px;
                 font-size:12px;
                 font-weight:bold;
                 white-space:nowrap;
                 border:2px solid #fff;
-                box-shadow:2px 2px 5px rgba(0,0,0,0.35);
+                box-shadow:2px 2px 5px rgba(0,0,0,0.3);
                 text-align:center;
-                line-height:1.4;
+                line-height:1.5;
+                text-shadow:0 1px 2px rgba(0,0,0,0.4);
             ">
-                {building}<br>
+                {building} ({dong})<br>
                 <span style="font-size:13px;">👤 {count}명</span>
             </div>
             """
@@ -179,8 +196,8 @@ def render_map(result_df: pd.DataFrame):
                 location=[row["lat"], row["lng"]],
                 icon=folium.DivIcon(
                     html=label_html,
-                    icon_size=(180, 52),
-                    icon_anchor=(90, 26)
+                    icon_size=(200, 52),
+                    icon_anchor=(100, 26)
                 ),
                 popup=folium.Popup(
                     f"<b>{building}</b><br>동: {dong}<br>환자 수: {count}명",
@@ -188,21 +205,23 @@ def render_map(result_df: pd.DataFrame):
                 )
             ).add_to(m2)
 
-        # 범례
-        dong_legend = "".join([
-            f"<li style='margin:3px 0'>"
-            f"<span style='color:{c}; font-size:16px;'>●</span> {d}</li>"
-            for d, c in dong_colors.items()
-        ])
+        # 환자 수 스케일 범례
         legend_html = f"""
         <div style="position:fixed; bottom:30px; left:30px; z-index:1000;
                     background:white; padding:12px 16px; border-radius:10px;
-                    border:1px solid #ddd; font-size:13px;
-                    box-shadow:2px 2px 6px rgba(0,0,0,0.15);">
-            <b>동 범례</b>
-            <ul style="margin:6px 0 0; padding-left:8px; list-style:none;">
-                {dong_legend}
-            </ul>
+                    border:1px solid #ddd; font-size:12px;
+                    box-shadow:2px 2px 6px rgba(0,0,0,0.15); min-width:140px;">
+            <b>환자 수</b>
+            <div style="margin-top:8px; display:flex; align-items:center; gap:6px;">
+                <div style="width:100px; height:14px; border-radius:7px;
+                    background:linear-gradient(to right,#74b9ff,#fdcb6e,#d63031);
+                    border:1px solid #ccc;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between;
+                        width:100px; margin-top:3px; color:#555;">
+                <span>{min_count}명</span>
+                <span>{max_count}명</span>
+            </div>
         </div>
         """
         m2.get_root().html.add_child(folium.Element(legend_html))
