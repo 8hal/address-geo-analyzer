@@ -224,9 +224,8 @@ def render_map(result_df: pd.DataFrame):
                     icon_anchor=(size // 2, size // 2)
                 ),
                 popup=folium.Popup(
-                    f"<b style='font-size:14px'>{building}</b><br>"
-                    f"📍 동: {dong}<br>"
-                    f"👤 환자 수: <b>{count}명</b>",
+                    f"<div style='font-size:16px;font-weight:bold;margin-bottom:6px;'>{building}</div>"
+                    f"<div style='font-size:12px;color:#555;'>📍 {dong} &nbsp;|&nbsp; 👤 {count}명</div>",
                     max_width=240
                 )
             ).add_to(m3)
