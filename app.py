@@ -189,7 +189,7 @@ def render_map(result_df: pd.DataFrame):
 
     # ── 2. 라벨맵 (줌 레벨에 따라 아파트 이름 표시/숨김) ──────────
     with tab_label:
-        st.caption("확대(줌 15+): 아파트 이름 표시 | 축소: 환자 수만 표시 | 클릭: 상세 정보")
+        st.caption("동 · 환자 수 표시 | 클릭하면 아파트 상세 정보 확인")
         m3 = folium.Map(location=[center_lat, center_lng], zoom_start=15,
                         tiles=CARTO_TILES, attr=CARTO_ATTR)
 
@@ -201,30 +201,29 @@ def render_map(result_df: pd.DataFrame):
             short    = building[:13] + "…" if len(building) > 13 else building
 
             label_html = f"""
-            <div class="apt-label" style="
+            <div style="
                 background:{color};
                 color:#fff;
                 padding:4px 9px;
                 border-radius:10px;
-                font-size:10px;
+                font-size:11px;
                 font-weight:bold;
                 white-space:nowrap;
                 border:1.5px solid rgba(255,255,255,0.8);
                 box-shadow:1px 1px 4px rgba(0,0,0,0.3);
                 text-align:center;
-                line-height:1.6;
+                line-height:1.5;
                 cursor:pointer;
             ">
-                <span class="apt-name" style="display:block;">{short} ({dong})</span>
-                <span class="apt-count" style="font-size:11px;">👤 {count}명</span>
+                {dong} · 👤 {count}명
             </div>"""
 
             folium.Marker(
                 location=[row["lat"], row["lng"]],
                 icon=folium.DivIcon(
                     html=label_html,
-                    icon_size=(160, 42),
-                    icon_anchor=(80, 21)
+                    icon_size=(120, 28),
+                    icon_anchor=(60, 14)
                 ),
                 popup=folium.Popup(
                     f"<b style='font-size:14px'>{building}</b><br>"
@@ -234,32 +233,6 @@ def render_map(result_df: pd.DataFrame):
                 )
             ).add_to(m3)
 
-        # 줌 레벨에 따라 아파트 이름 표시/숨김 JavaScript
-        map_name = m3.get_name()
-        zoom_js = f"""
-        <script>
-        (function() {{
-            function applyZoom(zoom) {{
-                var names = document.querySelectorAll('.apt-name');
-                names.forEach(function(el) {{
-                    el.style.display = (zoom >= 15) ? 'block' : 'none';
-                }});
-            }}
-            function waitForMap() {{
-                if (typeof {map_name} !== 'undefined') {{
-                    {map_name}.on('zoomend', function() {{
-                        applyZoom({map_name}.getZoom());
-                    }});
-                    applyZoom({map_name}.getZoom());
-                }} else {{
-                    setTimeout(waitForMap, 150);
-                }}
-            }}
-            waitForMap();
-        }})();
-        </script>
-        """
-        m3.get_root().html.add_child(folium.Element(zoom_js))
         m3.get_root().html.add_child(folium.Element(make_legend(min_count, max_count)))
         st_folium(m3, use_container_width=True, height=MAP_HEIGHT, key="tab_label",
                   returned_objects=[])
