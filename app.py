@@ -182,14 +182,14 @@ def render_map(result_df: pd.DataFrame):
         st.caption("밀집 지역을 색상 강도로 표현합니다.")
         m = folium.Map(location=[center_lat, center_lng], zoom_start=14,
                        tiles=CARTO_TILES, attr=CARTO_ATTR)
-        heat_data = [[r["lat"], r["lng"]] for _, r in valid.iterrows()]
-        HeatMap(heat_data, radius=28, blur=22, min_opacity=0.45,
-                gradient={"0.3": "#74b9ff", "0.6": "#fdcb6e", "1.0": "#d63031"}).add_to(m)
-        st_folium(m, use_container_width=True, height=MAP_HEIGHT, key="tab_heat")
+        heat_data = [[float(r["lat"]), float(r["lng"])] for _, r in valid.iterrows()]
+        HeatMap(heat_data, radius=30, blur=20, min_opacity=0.4).add_to(m)
+        st_folium(m, use_container_width=True, height=MAP_HEIGHT, key="tab_heat",
+                  returned_objects=[])
 
     # ── 2. 버블맵 ──────────────────────────────────────────────
     with tab_bubble:
-        st.caption("원 크기 = 환자 수 | 마우스 올리면 아파트명 | 겹침 없이 한눈에 파악")
+        st.caption("원 클릭 → 아파트 정보 팝업 | 원 크기 = 환자 수")
         m2 = folium.Map(location=[center_lat, center_lng], zoom_start=14,
                         tiles=CARTO_TILES, attr=CARTO_ATTR)
 
@@ -198,37 +198,40 @@ def render_map(result_df: pd.DataFrame):
             building = row["building"]
             dong     = row["dong"]
             color    = count_to_color(count, min_count, max_count)
-            radius   = 14 + (count - min_count) * 8   # 크기 차등
+            radius   = 18 + (count - min_count) * 10
 
-            # 원형 마커
+            # CircleMarker + popup (클릭시 정보 표시)
             folium.CircleMarker(
                 location=[row["lat"], row["lng"]],
                 radius=radius,
                 color="#fff",
-                weight=2,
+                weight=2.5,
                 fill=True,
                 fill_color=color,
-                fill_opacity=0.85,
+                fill_opacity=0.88,
                 tooltip=folium.Tooltip(
                     f"<b>{building}</b><br>동: {dong}<br>👤 {count}명",
                     sticky=True
                 ),
                 popup=folium.Popup(
-                    f"<b>{building}</b><br>동: {dong}<br>환자 수: {count}명",
-                    max_width=220
+                    f"<b style='font-size:14px'>{building}</b><br>"
+                    f"📍 동: {dong}<br>"
+                    f"👤 환자 수: <b>{count}명</b>",
+                    max_width=240
                 )
             ).add_to(m2)
 
-            # 원 위에 숫자 표시
+            # 숫자 라벨 (pointer-events:none → 클릭이 CircleMarker로 통과)
             folium.Marker(
                 location=[row["lat"], row["lng"]],
                 icon=folium.DivIcon(
                     html=f"""<div style="
+                        pointer-events:none;
                         width:{radius*2}px;height:{radius*2}px;
                         line-height:{radius*2}px;
                         text-align:center;font-weight:bold;
-                        font-size:{max(11, radius-2)}px;
-                        color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);
+                        font-size:{max(12, radius)}px;
+                        color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6);
                     ">{count}</div>""",
                     icon_size=(radius * 2, radius * 2),
                     icon_anchor=(radius, radius)
@@ -236,11 +239,12 @@ def render_map(result_df: pd.DataFrame):
             ).add_to(m2)
 
         m2.get_root().html.add_child(folium.Element(make_legend(min_count, max_count)))
-        st_folium(m2, use_container_width=True, height=MAP_HEIGHT, key="tab_bubble")
+        st_folium(m2, use_container_width=True, height=MAP_HEIGHT, key="tab_bubble",
+                  returned_objects=[])
 
     # ── 3. 라벨맵 ──────────────────────────────────────────────
     with tab_label:
-        st.caption("아파트명 + 환자 수를 라벨로 표시 | 확대하면 겹침 해소")
+        st.caption("기본 반투명 | hover/클릭 시 선명하게")
         m3 = folium.Map(location=[center_lat, center_lng], zoom_start=15,
                         tiles=CARTO_TILES, attr=CARTO_ATTR)
 
@@ -249,36 +253,51 @@ def render_map(result_df: pd.DataFrame):
             building = row["building"]
             dong     = row["dong"]
             color    = count_to_color(count, min_count, max_count)
+            # 긴 이름 축약
+            short    = building[:13] + "…" if len(building) > 13 else building
 
             label_html = f"""
             <div style="
-                background:{color};color:#fff;
-                padding:4px 9px;border-radius:14px;
-                font-size:11px;font-weight:bold;white-space:nowrap;
-                border:2px solid #fff;
-                box-shadow:2px 2px 5px rgba(0,0,0,0.3);
-                text-align:center;line-height:1.5;
-                text-shadow:0 1px 2px rgba(0,0,0,0.4);
-            ">
-                {building} ({dong})<br>
-                <span style="font-size:12px;">👤 {count}명</span>
+                background:{color};
+                color:#fff;
+                padding:3px 8px;
+                border-radius:10px;
+                font-size:10px;
+                font-weight:bold;
+                white-space:nowrap;
+                border:1.5px solid rgba(255,255,255,0.8);
+                box-shadow:1px 1px 4px rgba(0,0,0,0.25);
+                text-align:center;
+                line-height:1.5;
+                opacity:0.4;
+                transition:opacity 0.2s ease;
+                cursor:pointer;
+            "
+            onmouseover="this.style.opacity='1'"
+            onmouseout="this.style.opacity='0.4'"
+            onclick="this.style.opacity='1'">
+                {short} ({dong})<br>
+                <span style="font-size:11px;">👤 {count}명</span>
             </div>"""
 
             folium.Marker(
                 location=[row["lat"], row["lng"]],
                 icon=folium.DivIcon(
                     html=label_html,
-                    icon_size=(200, 50),
-                    icon_anchor=(100, 25)
+                    icon_size=(170, 44),
+                    icon_anchor=(85, 22)
                 ),
                 popup=folium.Popup(
-                    f"<b>{building}</b><br>동: {dong}<br>환자 수: {count}명",
-                    max_width=220
+                    f"<b style='font-size:14px'>{building}</b><br>"
+                    f"📍 동: {dong}<br>"
+                    f"👤 환자 수: <b>{count}명</b>",
+                    max_width=240
                 )
             ).add_to(m3)
 
         m3.get_root().html.add_child(folium.Element(make_legend(min_count, max_count)))
-        st_folium(m3, use_container_width=True, height=MAP_HEIGHT, key="tab_label")
+        st_folium(m3, use_container_width=True, height=MAP_HEIGHT, key="tab_label",
+                  returned_objects=[])
 
 
 # ─────────── 메인 UI ───────────
