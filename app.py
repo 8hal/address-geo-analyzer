@@ -121,16 +121,21 @@ def render_map(result_df: pd.DataFrame):
 
     tab1, tab2 = st.tabs(["🔥 히트맵", "📍 마커"])
 
+    CARTO_TILES = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+    CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+
     # 히트맵
     with tab1:
-        m = folium.Map(location=[center_lat, center_lng], zoom_start=14, tiles="CartoDB positron")
+        m = folium.Map(location=[center_lat, center_lng], zoom_start=14,
+                       tiles=CARTO_TILES, attr=CARTO_ATTR)
         heat_data = [[row["lat"], row["lng"]] for _, row in valid.iterrows()]
         HeatMap(heat_data, radius=20, blur=25, min_opacity=0.4).add_to(m)
         st_folium(m, use_container_width=True, height=500)
 
     # 마커 (아파트별 클러스터)
     with tab2:
-        m2 = folium.Map(location=[center_lat, center_lng], zoom_start=14, tiles="CartoDB positron")
+        m2 = folium.Map(location=[center_lat, center_lng], zoom_start=14,
+                        tiles=CARTO_TILES, attr=CARTO_ATTR)
         cluster = MarkerCluster().add_to(m2)
 
         dong_colors = {}
