@@ -154,7 +154,7 @@ def make_legend(min_count, max_count):
 
 
 def render_map(result_df: pd.DataFrame):
-    """Folium 지도 렌더링 (히트맵 / 버블 / 라벨 3가지 뷰)"""
+    """Folium 지도 렌더링 (히트맵 / 라벨맵)"""
     valid = result_df.dropna(subset=["lat", "lng"])
     if len(valid) == 0:
         st.warning("⚠️ 위경도 데이터가 없습니다. Kakao API 키를 설정해주세요.")
@@ -175,7 +175,7 @@ def render_map(result_df: pd.DataFrame):
     max_count = int(building_groups["count"].max()) if len(building_groups) > 0 else 1
 
     # ────────── 탭 ──────────
-    tab_heat, tab_bubble, tab_label = st.tabs(["🔥 히트맵", "⭕ 버블맵", "🏷️ 라벨맵"])
+    tab_heat, tab_label = st.tabs(["🔥 히트맵", "🏷️ 라벨맵"])
 
     # ── 1. 히트맵 ──────────────────────────────────────────────
     with tab_heat:
@@ -187,123 +187,44 @@ def render_map(result_df: pd.DataFrame):
         st_folium(m, use_container_width=True, height=MAP_HEIGHT, key="tab_heat",
                   returned_objects=[])
 
-    # ── 2. 버블맵 ──────────────────────────────────────────────
-    with tab_bubble:
-        st.caption("버블 클릭 → 아래 카드에 상세 정보 표시 | 버블 크기 = 환자 수")
-        m2 = folium.Map(location=[center_lat, center_lng], zoom_start=14,
-                        tiles=CARTO_TILES, attr=CARTO_ATTR)
-
-        for _, row in building_groups.iterrows():
-            count    = int(row["count"])
-            building = row["building"]
-            dong     = row["dong"]
-            color    = count_to_color(count, min_count, max_count)
-            radius   = 18 + (count - min_count) * 10
-
-            folium.CircleMarker(
-                location=[row["lat"], row["lng"]],
-                radius=radius,
-                color="#fff",
-                weight=2.5,
-                fill=True,
-                fill_color=color,
-                fill_opacity=0.88,
-                tooltip=folium.Tooltip(
-                    f"<div style='font-size:13px;padding:4px 2px;'>"
-                    f"<b>{building}</b><br>📍 {dong} | 👤 {count}명</div>",
-                    sticky=True
-                )
-            ).add_to(m2)
-
-            # 숫자 (pointer-events:none → 클릭 통과)
-            folium.Marker(
-                location=[row["lat"], row["lng"]],
-                icon=folium.DivIcon(
-                    html=f"""<div style="
-                        pointer-events:none;
-                        width:{radius*2}px;height:{radius*2}px;
-                        line-height:{radius*2}px;
-                        text-align:center;font-weight:bold;
-                        font-size:{max(12, radius)}px;
-                        color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6);
-                    ">{count}</div>""",
-                    icon_size=(radius * 2, radius * 2),
-                    icon_anchor=(radius, radius)
-                )
-            ).add_to(m2)
-
-        m2.get_root().html.add_child(folium.Element(make_legend(min_count, max_count)))
-
-        # 클릭 결과 수신 (last_object_clicked_tooltip로 건물 식별)
-        bubble_result = st_folium(m2, use_container_width=True, height=MAP_HEIGHT,
-                                  key="tab_bubble",
-                                  returned_objects=["last_object_clicked_tooltip"])
-
-        # 클릭한 버블 정보를 session_state에 저장
-        if bubble_result and bubble_result.get("last_object_clicked_tooltip"):
-            raw = bubble_result["last_object_clicked_tooltip"]
-            st.session_state["bubble_selected"] = raw
-
-        # 선택 정보 카드 표시
-        if st.session_state.get("bubble_selected"):
-            import re
-            raw = st.session_state["bubble_selected"]
-            # HTML 태그 제거해서 텍스트만 추출
-            text = re.sub(r"<[^>]+>", "", raw).strip()
-            st.markdown(
-                f"""<div style="
-                    background:#f8f9fa;border-left:4px solid #3498db;
-                    padding:12px 16px;border-radius:0 8px 8px 0;
-                    font-size:14px;margin-top:8px;">
-                    📌 {text}
-                </div>""",
-                unsafe_allow_html=True
-            )
-
-    # ── 3. 라벨맵 ──────────────────────────────────────────────
+    # ── 2. 라벨맵 (줌 레벨에 따라 아파트 이름 표시/숨김) ──────────
     with tab_label:
-        st.caption("기본 반투명 | hover/클릭 시 선명하게")
+        st.caption("확대(줌 15+): 아파트 이름 표시 | 축소: 환자 수만 표시 | 클릭: 상세 정보")
         m3 = folium.Map(location=[center_lat, center_lng], zoom_start=15,
                         tiles=CARTO_TILES, attr=CARTO_ATTR)
 
-        for _, row in building_groups.iterrows():
+        for i, (_, row) in enumerate(building_groups.iterrows()):
             count    = int(row["count"])
             building = row["building"]
             dong     = row["dong"]
             color    = count_to_color(count, min_count, max_count)
-            # 긴 이름 축약
             short    = building[:13] + "…" if len(building) > 13 else building
 
             label_html = f"""
-            <div style="
+            <div class="apt-label" style="
                 background:{color};
                 color:#fff;
-                padding:3px 8px;
+                padding:4px 9px;
                 border-radius:10px;
                 font-size:10px;
                 font-weight:bold;
                 white-space:nowrap;
                 border:1.5px solid rgba(255,255,255,0.8);
-                box-shadow:1px 1px 4px rgba(0,0,0,0.25);
+                box-shadow:1px 1px 4px rgba(0,0,0,0.3);
                 text-align:center;
-                line-height:1.5;
-                opacity:0.4;
-                transition:opacity 0.2s ease;
+                line-height:1.6;
                 cursor:pointer;
-            "
-            onmouseover="this.style.opacity='1'"
-            onmouseout="this.style.opacity='0.4'"
-            onclick="this.style.opacity='1'">
-                {short} ({dong})<br>
-                <span style="font-size:11px;">👤 {count}명</span>
+            ">
+                <span class="apt-name" style="display:block;">{short} ({dong})</span>
+                <span class="apt-count" style="font-size:11px;">👤 {count}명</span>
             </div>"""
 
             folium.Marker(
                 location=[row["lat"], row["lng"]],
                 icon=folium.DivIcon(
                     html=label_html,
-                    icon_size=(170, 44),
-                    icon_anchor=(85, 22)
+                    icon_size=(160, 42),
+                    icon_anchor=(80, 21)
                 ),
                 popup=folium.Popup(
                     f"<b style='font-size:14px'>{building}</b><br>"
@@ -313,6 +234,32 @@ def render_map(result_df: pd.DataFrame):
                 )
             ).add_to(m3)
 
+        # 줌 레벨에 따라 아파트 이름 표시/숨김 JavaScript
+        map_name = m3.get_name()
+        zoom_js = f"""
+        <script>
+        (function() {{
+            function applyZoom(zoom) {{
+                var names = document.querySelectorAll('.apt-name');
+                names.forEach(function(el) {{
+                    el.style.display = (zoom >= 15) ? 'block' : 'none';
+                }});
+            }}
+            function waitForMap() {{
+                if (typeof {map_name} !== 'undefined') {{
+                    {map_name}.on('zoomend', function() {{
+                        applyZoom({map_name}.getZoom());
+                    }});
+                    applyZoom({map_name}.getZoom());
+                }} else {{
+                    setTimeout(waitForMap, 150);
+                }}
+            }}
+            waitForMap();
+        }})();
+        </script>
+        """
+        m3.get_root().html.add_child(folium.Element(zoom_js))
         m3.get_root().html.add_child(folium.Element(make_legend(min_count, max_count)))
         st_folium(m3, use_container_width=True, height=MAP_HEIGHT, key="tab_label",
                   returned_objects=[])
